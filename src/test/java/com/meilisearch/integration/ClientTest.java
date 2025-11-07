@@ -329,6 +329,55 @@ public class ClientTest extends AbstractIT {
         assertThat(exportTask.getType(), is(equalTo("export")));
     }
 
+    /** Test call to compact an index */
+    @Test
+    public void testCompact() throws Exception {
+        String indexUid = "testCompactIndex";
+        Index index = client.index(indexUid);
+
+        TaskInfo task = index.compact();
+        client.waitForTask(task.getTaskUid());
+        Task compactTask = client.getTask(task.getTaskUid());
+
+        assertThat(task.getStatus(), is(equalTo(TaskStatus.ENQUEUED)));
+        assertThat(compactTask.getType(), is(equalTo("indexCompaction")));
+    }
+
+    /** Test compact operation on index with documents */
+    @Test
+    public void testCompactWithDocuments() throws Exception {
+        String indexUid = "testCompactWithDocuments";
+        Index index = createEmptyIndex(indexUid, this.primaryKey);
+
+        // Add documents to the index
+        TaskInfo addTask =
+                index.addDocuments(
+                        "[{"
+                                + "\"id\": 1,"
+                                + "\"title\": \"Document1\","
+                                + "\"description\": \"Test document 1\""
+                                + "},"
+                                + "{"
+                                + "\"id\": 2,"
+                                + "\"title\": \"Document2\","
+                                + "\"description\": \"Test document 2\""
+                                + "}]");
+        index.waitForTask(addTask.getTaskUid());
+
+        // Compact the index
+        TaskInfo compactTask = index.compact();
+        client.waitForTask(compactTask.getTaskUid());
+        Task completedCompactTask = client.getTask(compactTask.getTaskUid());
+
+        assertThat(compactTask.getStatus(), is(equalTo(TaskStatus.ENQUEUED)));
+        assertThat(completedCompactTask.getType(), is(equalTo("indexCompaction")));
+        assertThat(completedCompactTask.getStatus(), is(equalTo(TaskStatus.SUCCEEDED)));
+
+        // Verify documents are still accessible after compaction
+        assertThat(index.getDocument("1", Movie.class).getTitle(), is(equalTo("Document1")));
+        assertThat(index.getDocument("2", Movie.class).getTitle(), is(equalTo("Document2")));
+    }
+
     /**
      * Test the exclusion of transient fields.
      *
